@@ -6,7 +6,7 @@
 // ===== CONFIGURATION =====
 const ADMIN_WALLET_ADDRESS = "UQDeGY3zk1PQK5PKyGr8KsDL7tvRVYL7xpKc0DfoDxSSsunU";
 const ADMIN_TELEGRAM_ID = 7615522822;
-const BOT_USERNAME_DEFAULT = 'BeeEmpireBot'; // Update to your actual bot @username
+const BOT_USERNAME_DEFAULT = 'BeeEmpireBot';
 const API_URL = ""; // Set to backend URL for leaderboard, e.g. "https://your-server.com"
 
 let isAdmin = false; // Set true after detecting admin Telegram ID
