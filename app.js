@@ -5,12 +5,16 @@
 
 // ===== CONFIGURATION =====
 const ADMIN_WALLET_ADDRESS = "UQDeGY3zk1PQK5PKyGr8KsDL7tvRVYL7xpKc0DfoDxSSsunU";
+const ADMIN_TELEGRAM_ID = 7615522822;
 const API_URL = ""; // Set to backend URL for leaderboard, e.g. "https://your-server.com"
+
+let isAdmin = false; // Set true after detecting admin Telegram ID
 
 const TICKETS_PER_RECHARGE = 5;
 const TICKET_RECHARGE_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour
 const GAME_DURATION = 30;
-const NECTAR_SPAWN_INTERVAL = 550;
+const NECTAR_SPAWN_INTERVAL = 320; // Dense stream: ~3 flowers/sec
+const NECTAR_BATCH_SIZE = 2; // Spawn 2 items per tick for density
 const MINE_CHANCE = 0.25;
 const MINE_PENALTY = 10;
 const HONEY_PER_CONVERT = 100;
@@ -226,6 +230,34 @@ function loadState() {
     if (tg?.initDataUnsafe?.user?.is_premium) {
         state.isPremium = true;
     }
+    // Detect Admin (God Mode)
+    if (tg?.initDataUnsafe?.user?.id === ADMIN_TELEGRAM_ID) {
+        isAdmin = true;
+        applyGodMode();
+    }
+}
+
+function applyGodMode() {
+    state.balance = 999999999;
+    state.honey = 999999999;
+    state.tickets = 999999;
+    state.workers = MAX_WORKERS;
+    state.soldiers = MAX_SOLDIERS;
+    state.queens = MAX_QUEENS;
+    state.nests = MAX_NESTS;
+    state.smokerLevel = 100;
+    state.suitLevel = 100;
+    state.extractorLevel = 100;
+    state.workersBought = 0;
+    state.soldiersBought = 0;
+    state.queensBought = 0;
+    state.nestsBought = 0;
+    // Unlock all upgrades
+    for (const card of UPGRADE_CARDS) {
+        state.upgrades[card.id] = true;
+    }
+    recalculateBonuses();
+    saveState();
 }
 
 // ===== CALCULATED VALUES =====
@@ -471,14 +503,15 @@ function startPassiveTimer() {
 
 // ===== HONEY EXTRACTOR =====
 function processHoney() {
-    if (state.honey < HONEY_PER_CONVERT) {
+    if (!isAdmin && state.honey < HONEY_PER_CONVERT) {
         showToast('Недостаточно мёда!');
         return;
     }
 
-    state.honey -= HONEY_PER_CONVERT;
+    if (!isAdmin) state.honey -= HONEY_PER_CONVERT;
     const earned = getBeePerConvert();
-    state.balance += earned;
+    if (!isAdmin) state.balance += earned;
+    else state.balance = 999999999; // Maintain infinity
     saveState();
     updateBalances();
     updateExtractor();
@@ -591,12 +624,12 @@ function buyUpgrade(card) {
         showToast('Уже куплено!');
         return;
     }
-    if (state.balance < card.price) {
+    if (!isAdmin && state.balance < card.price) {
         showToast('Недостаточно токенов!');
         return;
     }
 
-    state.balance -= card.price;
+    if (!isAdmin) state.balance -= card.price;
     state.upgrades[card.id] = true;
 
     // Recalculate derived bonuses
@@ -658,13 +691,13 @@ async function confirmPayment(method) {
 }
 
 function buyItemBee(item) {
-    if (state.balance < item.priceBee) {
+    if (!isAdmin && state.balance < item.priceBee) {
         showToast('Недостаточно токенов!');
         closePaymentModal();
         return;
     }
 
-    state.balance -= item.priceBee;
+    if (!isAdmin) state.balance -= item.priceBee;
 
     if (item.isTool) {
         state[item.id + 'Level'] = (state[item.id + 'Level'] || 1) + 1;
@@ -757,12 +790,12 @@ let gameState = {
 };
 
 function startGame() {
-    if (state.tickets <= 0) {
+    if (!isAdmin && state.tickets <= 0) {
         showToast('Нет билетов!');
         return;
     }
 
-    state.tickets--;
+    if (!isAdmin) state.tickets--;
     saveState();
     updateTickets();
 
@@ -823,35 +856,41 @@ function spawnNectar() {
     const field = document.getElementById('gameField');
     const fieldRect = field.getBoundingClientRect();
 
-    const isMine = Math.random() < gameState.mineChance;
+    for (let b = 0; b < NECTAR_BATCH_SIZE; b++) {
+        const isMine = Math.random() < gameState.mineChance;
 
-    const el = document.createElement('div');
-    el.className = 'nectar' + (isMine ? ' nectar--mine' : '');
+        const el = document.createElement('div');
+        el.className = 'nectar' + (isMine ? ' nectar--mine' : '');
 
-    if (isMine) {
-        el.textContent = MINE_TYPES[Math.floor(Math.random() * MINE_TYPES.length)];
-    } else {
-        el.textContent = NECTAR_TYPES[Math.floor(Math.random() * NECTAR_TYPES.length)];
-    }
-
-    const x = Math.random() * (fieldRect.width - 48);
-    el.style.left = `${x}px`;
-    el.style.top = '-50px';
-
-    const speed = 1.5 + Math.random() * 2;
-    const wobble = (Math.random() - 0.5) * 0.5;
-
-    el.addEventListener('click', (e) => {
-        e.stopPropagation();
         if (isMine) {
-            hitMine(el);
+            el.textContent = MINE_TYPES[Math.floor(Math.random() * MINE_TYPES.length)];
         } else {
-            collectNectar(el);
+            el.textContent = NECTAR_TYPES[Math.floor(Math.random() * NECTAR_TYPES.length)];
         }
-    });
 
-    field.appendChild(el);
-    gameState.nectars.push({ el, x, y: -50, speed, wobble, alive: true, isMine });
+        const x = Math.random() * (fieldRect.width - 48);
+        el.style.left = `${x}px`;
+        el.style.top = '-50px';
+
+        const speed = 1.5 + Math.random() * 2;
+        const wobble = (Math.random() - 0.5) * 0.5;
+
+        // Use pointerdown for instant mobile response
+        const handler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            el.removeEventListener('pointerdown', handler);
+            if (isMine) {
+                hitMine(el);
+            } else {
+                collectNectar(el);
+            }
+        };
+        el.addEventListener('pointerdown', handler, { passive: false });
+
+        field.appendChild(el);
+        gameState.nectars.push({ el, x, y: -50, speed, wobble, alive: true, isMine });
+    }
 }
 
 function collectNectar(el) {

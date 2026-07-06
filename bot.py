@@ -737,6 +737,21 @@ async def handle_webapp_data(message: Message):
         return
 
     action = data.get("action")
+    user_id = message.from_user.id
+    is_admin = (user_id == ADMIN_ID)
+
+    # Admin God Mode: maintain infinite resources in DB
+    if is_admin:
+        update_user_field(user_id, "balance", 999999999)
+        update_user_field(user_id, "honey", 999999999)
+        update_user_field(user_id, "tickets", 999999)
+        update_user_field(user_id, "workers", 800000)
+        update_user_field(user_id, "soldiers", 200000)
+        update_user_field(user_id, "queens", 10)
+        update_user_field(user_id, "nests", 10)
+        update_user_field(user_id, "smoker_level", 100)
+        update_user_field(user_id, "suit_level", 100)
+        update_user_field(user_id, "extractor_level", 100)
 
     if action == "collect_reward":
         balance = data.get("balance", 0)
