@@ -798,6 +798,17 @@ async def handle_webapp_data(message: Message):
         except Exception:
             pass
 
+    elif action == "exchange_honey":
+        balance = data.get("balance", 0)
+        honey = data.get("honey", 0)
+        earned = data.get("earned", 0)
+        update_user_field(message.from_user.id, "balance", balance)
+        update_user_field(message.from_user.id, "honey", honey)
+
+    elif action == "get_bot_username":
+        bot_info = await message.bot.get_me()
+        await message.answer(f"BOT_USERNAME:{bot_info.username}")
+
     elif action == "get_leaderboard":
         top = get_top_users(10)
         user_rank = get_user_rank(message.from_user.id)

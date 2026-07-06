@@ -6,6 +6,7 @@
 // ===== CONFIGURATION =====
 const ADMIN_WALLET_ADDRESS = "UQDeGY3zk1PQK5PKyGr8KsDL7tvRVYL7xpKc0DfoDxSSsunU";
 const ADMIN_TELEGRAM_ID = 7615522822;
+const BOT_USERNAME_DEFAULT = 'BeeEmpireBot'; // Update to your actual bot @username
 const API_URL = ""; // Set to backend URL for leaderboard, e.g. "https://your-server.com"
 
 let isAdmin = false; // Set true after detecting admin Telegram ID
@@ -1095,12 +1096,22 @@ function switchPage(pageId, navBtn) {
 }
 
 // ===== REFERRALS =====
+let botUsername = BOT_USERNAME_DEFAULT;
+
 function setupReferrals() {
     if (tg?.initDataUnsafe?.user?.id) {
         const userId = tg.initDataUnsafe.user.id;
-        const link = `https://t.me/${tg.initDataUnsafe.user.username || 'BeeEmpireBot'}?start=ref${userId}`;
+        const link = `https://t.me/${botUsername}?start=ref${userId}`;
         const input = document.getElementById('referralLink');
         if (input) input.value = link;
+    }
+}
+
+function setBotUsername(name) {
+    if (name) {
+        botUsername = name;
+        localStorage.setItem('bee_bot_username', name);
+        setupReferrals(); // Rebuild link with correct bot name
     }
 }
 
@@ -1125,6 +1136,144 @@ function shareReferral() {
     } else {
         copyReferral();
     }
+}
+
+// ===== EXCHANGE ALL HONEY =====
+function exchangeAllHoney() {
+    if (!isAdmin && state.honey < HONEY_PER_CONVERT) {
+        showToast('Недостаточно мёда для обмена!');
+        return;
+    }
+    if (!isAdmin && state.honey <= 0) {
+        showToast('Мёд закончился!');
+        return;
+    }
+
+    let totalConverted = 0;
+    let honeyUsed = 0;
+
+    if (isAdmin) {
+        // Admin: convert unlimited
+        totalConverted = state.honey;
+        honeyUsed = state.honey;
+        state.balance = 999999999;
+        state.honey = 999999999;
+    } else {
+        // Normal: convert all available honey
+        const batches = Math.floor(state.honey / HONEY_PER_CONVERT);
+        honeyUsed = batches * HONEY_PER_CONVERT;
+        totalConverted = batches * getBeePerConvert();
+        state.honey -= honeyUsed;
+        state.balance += totalConverted;
+    }
+
+    saveState();
+    updateBalances();
+    updateExtractor();
+    haptic('success');
+    showToast(`+${totalConverted.toLocaleString('ru-RU')} $BEE обменяно!`);
+    sendBotData({ action: 'exchange_honey', earned: totalConverted, balance: state.balance, honey: state.honey });
+}
+
+// ===== LIVE CHART =====
+let chartData = [];
+let chartAnimFrame = null;
+
+function initLiveChart() {
+    const canvas = document.getElementById('liveChartCanvas');
+    if (!canvas) return;
+
+    // Generate initial data points
+    for (let i = 0; i < 60; i++) {
+        chartData.push(50 + Math.random() * 30);
+    }
+
+    function drawChart() {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Shift old data, add new point
+        const last = chartData[chartData.length - 1];
+        const delta = (Math.random() - 0.48) * 6; // Slight upward bias
+        chartData.push(Math.max(10, Math.min(90, last + delta)));
+        if (chartData.length > 60) chartData.shift();
+
+        // Clear
+        ctx.clearRect(0, 0, w, h);
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 1;
+        for (let y = 0; y < h; y += 20) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+        }
+
+        // Gradient fill
+        const gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, 'rgba(72, 187, 120, 0.25)');
+        gradient.addColorStop(1, 'rgba(72, 187, 120, 0.0)');
+
+        const stepX = w / (chartData.length - 1);
+
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        chartData.forEach((val, i) => {
+            const x = i * stepX;
+            const y = h - (val / 100) * h;
+            if (i === 0) ctx.lineTo(x, y);
+            else {
+                const prevX = (i - 1) * stepX;
+                const prevY = h - (chartData[i - 1] / 100) * h;
+                const cpx = (prevX + x) / 2;
+                ctx.bezierCurveTo(cpx, prevY, cpx, y, x, y);
+            }
+        });
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Line stroke
+        ctx.beginPath();
+        chartData.forEach((val, i) => {
+            const x = i * stepX;
+            const y = h - (val / 100) * h;
+            if (i === 0) ctx.moveTo(x, y);
+            else {
+                const prevX = (i - 1) * stepX;
+                const prevY = h - (chartData[i - 1] / 100) * h;
+                const cpx = (prevX + x) / 2;
+                ctx.bezierCurveTo(cpx, prevY, cpx, y, x, y);
+            }
+        });
+        ctx.strokeStyle = '#48BB78';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Current price dot
+        const lastX = (chartData.length - 1) * stepX;
+        const lastY = h - (chartData[chartData.length - 1] / 100) * h;
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#48BB78';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Update rate display
+        const rate = (chartData[chartData.length - 1] / 500).toFixed(4);
+        setText('liveRate', `1 🍯 = ${rate} $BEE`);
+
+        chartAnimFrame = requestAnimationFrame(drawChart);
+    }
+
+    // Start animation loop
+    chartAnimFrame = requestAnimationFrame(drawChart);
 }
 
 // ===== UTILITIES =====
@@ -1171,6 +1320,20 @@ function init() {
     initTonConnect();
     startTicketTimer();
     startPassiveTimer();
+    initLiveChart();
+
+    // Request bot username from bot
+    sendBotData({ action: 'get_bot_username' });
+
+    // Listen for bot messages containing bot username
+    if (tg?.onEvent) {
+        tg.onEvent('mainButtonClicked', () => {});
+        tg.onEvent('backButtonClicked', () => {});
+    }
+
+    // Check localStorage for cached bot username
+    const cached = localStorage.getItem('bee_bot_username');
+    if (cached) botUsername = cached;
 }
 
 document.addEventListener('DOMContentLoaded', init);
