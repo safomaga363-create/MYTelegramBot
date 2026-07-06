@@ -1,27 +1,101 @@
 /**
- * Bee Empire — Main Application Logic
- * Hamster Kombat + Blum mechanics, TON Connect integration
+ * Bee Empire — Main Application Logic v2
+ * Apiary management, honey extractor, mine game with mines, leaderboard, TON Connect
  */
 
 // ===== CONFIGURATION =====
 const ADMIN_WALLET_ADDRESS = "UQDeGY3zk1PQK5PKyGr8KsDL7tvRVYL7xpKc0DfoDxSSsunU";
+const API_URL = ""; // Set to backend URL for leaderboard, e.g. "https://your-server.com"
 
-const COLLECTION_DURATION = 8 * 60 * 60 * 1000; // 8 hours
-const REWARD_PER_CYCLE = 100;
-const TICKETS_PER_RECHARGE = 50;
-const TICKET_RECHARGE_INTERVAL = 8 * 60 * 60 * 1000; // 8 hours
-const GAME_DURATION = 30; // seconds
-const NECTAR_SPAWN_INTERVAL = 600; // ms between spawns
-const STORAGE_KEY = 'bee_empire_data';
+const TICKETS_PER_RECHARGE = 5;
+const TICKET_RECHARGE_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour
+const GAME_DURATION = 30;
+const NECTAR_SPAWN_INTERVAL = 550;
+const MINE_CHANCE = 0.25;
+const MINE_PENALTY = 10;
+const HONEY_PER_CONVERT = 100;
+const BEE_PER_CONVERT_BASE = 10;
+const MAX_NESTS = 10;
+const MAX_QUEENS = 10;
+const MAX_WORKERS = 800000;
+const MAX_SOLDIERS = 200000;
+const BEES_PER_NEST = 10000;
+const PASSIVE_HONEY_PER_HOUR = 100;
+const PREMIUM_HONEY_BONUS = 0.15;
+const PREMIUM_TICKET_BONUS = 2;
+const STORAGE_KEY = 'bee_empire_v2';
 
-const SHOP_ITEMS = [
-    { id: 'smoker',    name: 'Дымарь',    icon: '💨', priceBee: 50,   priceTon: 0.05 },
-    { id: 'suit',      name: 'Костюм',    icon: '🥽', priceBee: 200,  priceTon: 0.1  },
-    { id: 'extractor', name: 'Медогонка', icon: '⚙️', priceBee: 500,  priceTon: 0.25 },
-    { id: 'queen',     name: 'Матка',     icon: '👑', priceBee: 1000, priceTon: 0.5  },
+// ===== TOOLS (level-based) =====
+const TOOLS = [
+    { id: 'smoker',    name: 'Дымарь',    icon: '💨', basePrice: 50,   basePriceTon: 0.05,  desc: 'Успокаивает пчёл, повышая продуктивность' },
+    { id: 'suit',      name: 'Костюм',    icon: '🥽', basePrice: 200,  basePriceTon: 0.1,   desc: 'Защита пчеловода, +% к сбору' },
+    { id: 'extractor', name: 'Медогонка', icon: '⚙️', basePrice: 500,  basePriceTon: 0.25,  desc: 'Перерабатывает мёд в токены быстрее' },
+];
+
+// ===== BEE PURCHASES (count-based) =====
+const BEE_ITEMS = [
+    { id: 'workers',  name: 'Рабочие пчёлы',   icon: '🐝', basePrice: 10,  basePriceTon: 0.01,  amount: 1000,  maxAmount: MAX_WORKERS,  priceInc: 5,   desc: 'Рабочие пчёлы для добычи мёда' },
+    { id: 'soldiers', name: 'Пчёлы-солдаты',    icon: '🪖', basePrice: 50,  basePriceTon: 0.03,  amount: 500,   maxAmount: MAX_SOLDIERS, priceInc: 25,  desc: 'Защищают пасеку от врагов' },
+    { id: 'queens',   name: 'Королевы (Матки)',  icon: '👑', basePrice: 1000, basePriceTon: 0.5, amount: 1,     maxAmount: MAX_QUEENS,   priceInc: 500, desc: 'Управляют ульями' },
+    { id: 'nests',    name: 'Гнёзда (Ульи)',     icon: '🛖', basePrice: 500, basePriceTon: 0.2,  amount: 1,     maxAmount: MAX_NESTS,    priceInc: 250, desc: 'Дом для пчёл. Нужно 10K пчёл для активации' },
+];
+
+// ===== 50 UPGRADE CARDS =====
+const UPGRADE_CARDS = [
+    { id: 'hc1', icon: '🍯', name: 'Сбор мёда I', desc: '+5% к сбору мёда', price: 50 },
+    { id: 'hc2', icon: '🍯', name: 'Сбор мёда II', desc: '+10% к сбору', price: 150 },
+    { id: 'hc3', icon: '🍯', name: 'Сбор мёда III', desc: '+15% к сбору', price: 400 },
+    { id: 'hc4', icon: '🍯', name: 'Сбор мёда IV', desc: '+20% к сбору', price: 800 },
+    { id: 'hc5', icon: '🍯', name: 'Сбор мёда V', desc: '+25% к сбору', price: 1500 },
+    { id: 'tc1', icon: '🔄', name: 'Конвертация I', desc: '+2 токена за 100 мёда', price: 75 },
+    { id: 'tc2', icon: '🔄', name: 'Конвертация II', desc: '+4 токена за 100', price: 200 },
+    { id: 'tc3', icon: '🔄', name: 'Конвертация III', desc: '+6 токенов за 100', price: 500 },
+    { id: 'tc4', icon: '🔄', name: 'Конвертация IV', desc: '+8 токенов за 100', price: 1000 },
+    { id: 'tc5', icon: '🔄', name: 'Конвертация V', desc: '+10 токенов за 100', price: 2000 },
+    { id: 'bp1', icon: '🐝', name: 'Продуктивность I', desc: '+5% к добыче', price: 100 },
+    { id: 'bp2', icon: '🐝', name: 'Продуктивность II', desc: '+10% к добыче', price: 300 },
+    { id: 'bp3', icon: '🐝', name: 'Продуктивность III', desc: '+15% к добыче', price: 600 },
+    { id: 'bp4', icon: '🐝', name: 'Продуктивность IV', desc: '+20% к добыче', price: 1200 },
+    { id: 'bp5', icon: '🐝', name: 'Продуктивность V', desc: '+25% к добыче', price: 2500 },
+    { id: 'nc1', icon: '🛖', name: 'Вместимость I', desc: '+500 к лимиту', price: 120 },
+    { id: 'nc2', icon: '🛖', name: 'Вместимость II', desc: '+1000 к лимиту', price: 350 },
+    { id: 'nc3', icon: '🛖', name: 'Вместимость III', desc: '+2000 к лимиту', price: 700 },
+    { id: 'nc4', icon: '🛖', name: 'Вместимость IV', desc: '+3000 к лимиту', price: 1500 },
+    { id: 'nc5', icon: '🛖', name: 'Вместимость V', desc: '+5000 к лимиту', price: 3000 },
+    { id: 'ss1', icon: '🪖', name: 'Сила солдат I', desc: '+10% к защите', price: 150 },
+    { id: 'ss2', icon: '🪖', name: 'Сила солдат II', desc: '+20% к защите', price: 400 },
+    { id: 'ss3', icon: '🪖', name: 'Сила солдат III', desc: '+30% к защите', price: 800 },
+    { id: 'ss4', icon: '🪖', name: 'Сила солдат IV', desc: '+40% к защите', price: 1600 },
+    { id: 'ss5', icon: '🪖', name: 'Сила солдат V', desc: '+50% к защите', price: 3200 },
+    { id: 'qp1', icon: '👑', name: 'Феромон I', desc: '+5% к скорости', price: 200 },
+    { id: 'qp2', icon: '👑', name: 'Феромон II', desc: '+10% к скорости', price: 500 },
+    { id: 'qp3', icon: '👑', name: 'Феромон III', desc: '+15% к скорости', price: 1000 },
+    { id: 'qp4', icon: '👑', name: 'Феромон IV', desc: '+20% к скорости', price: 2000 },
+    { id: 'qp5', icon: '👑', name: 'Феромон V', desc: '+25% к скорости', price: 4000 },
+    { id: 'gb1', icon: '🎮', name: 'Бонус игры I', desc: '+1 очко за нектар', price: 100 },
+    { id: 'gb2', icon: '🎮', name: 'Бонус игры II', desc: '+2 очка за нектар', price: 250 },
+    { id: 'gb3', icon: '🎮', name: 'Бонус игры III', desc: '+3 очка за нектар', price: 600 },
+    { id: 'gb4', icon: '🎮', name: 'Бонус игры IV', desc: '+5 очков за нектар', price: 1200 },
+    { id: 'gb5', icon: '🎮', name: 'Бонус игры V', desc: '+10 очков за нектар', price: 2500 },
+    { id: 'te1', icon: '🎟️', name: 'Билеты I', desc: '+5 билетов к пополнению', price: 80 },
+    { id: 'te2', icon: '🎟️', name: 'Билеты II', desc: '+10 билетов', price: 200 },
+    { id: 'te3', icon: '🎟️', name: 'Билеты III', desc: '+15 билетов', price: 450 },
+    { id: 'te4', icon: '🎟️', name: 'Билеты IV', desc: '+20 билетов', price: 900 },
+    { id: 'te5', icon: '🎟️', name: 'Билеты V', desc: '+25 билетов', price: 1800 },
+    { id: 'ph1', icon: '🌿', name: 'Пассивный I', desc: '+5% к пассивному мёду', price: 150 },
+    { id: 'ph2', icon: '🌿', name: 'Пассивный II', desc: '+10% к пассивному', price: 400 },
+    { id: 'ph3', icon: '🌿', name: 'Пассивный III', desc: '+15% к пассивному', price: 800 },
+    { id: 'ph4', icon: '🌿', name: 'Пассивный IV', desc: '+20% к пассивному', price: 1600 },
+    { id: 'ph5', icon: '🌿', name: 'Пассивный V', desc: '+25% к пассивному', price: 3200 },
+    { id: 'sp1', icon: '⚡', name: 'Скорость I', desc: '+10% к переработке', price: 200 },
+    { id: 'sp2', icon: '⚡', name: 'Скорость II', desc: '+20% к переработке', price: 500 },
+    { id: 'sp3', icon: '💎', name: 'Удача I', desc: '-5% шанс мины', price: 300 },
+    { id: 'sp4', icon: '💎', name: 'Удача II', desc: '-10% шанс мины', price: 750 },
+    { id: 'sp5', icon: '🌟', name: 'Элитный', desc: 'Все бонусы +5%', price: 5000 },
 ];
 
 const NECTAR_TYPES = ['🌸', '🌺', '🌼', '💮', '🪷'];
+const MINE_TYPES = ['💣', '🐝'];
 
 // ===== TELEGRAM WEB APP =====
 const tg = window.Telegram?.WebApp;
@@ -92,16 +166,47 @@ async function handleWalletClick() {
 // ===== STATE =====
 let state = {
     balance: 0,
-    isCollecting: false,
-    startTime: null,
-    cycleCount: 0,
-    items: {},
+    honey: 0,
     tickets: TICKETS_PER_RECHARGE,
     lastTicketsUpdate: Date.now(),
-    tapCount: 0,
+
+    // Apiary
+    nests: 0,
+    queens: 0,
+    workers: 0,
+    soldiers: 0,
+
+    // Tool levels
+    smokerLevel: 1,
+    suitLevel: 1,
+    extractorLevel: 1,
+
+    // Purchase counts (for price calculation)
+    workersBought: 0,
+    soldiersBought: 0,
+    queensBought: 0,
+    nestsBought: 0,
+
+    // Upgrade cards purchased
+    upgrades: {},
+
+    // Premium
+    isPremium: false,
+
+    // Passive honey tracking
+    lastPassiveUpdate: Date.now(),
+
+    // Referrals
+    referralCount: 0,
+    referralEarned: 0,
+
+    // Game bonus from upgrades
+    gameBonusPerNectar: 0,
+    mineChanceReduction: 0,
+    convertBonus: 0,
 };
 
-let timerInterval = null;
+let passiveTimer = null;
 let ticketInterval = null;
 
 // ===== PERSISTENCE =====
@@ -117,32 +222,191 @@ function loadState() {
             state = { ...state, ...parsed };
         } catch (e) { /* ignore */ }
     }
+    // Detect Telegram Premium
+    if (tg?.initDataUnsafe?.user?.is_premium) {
+        state.isPremium = true;
+    }
+}
+
+// ===== CALCULATED VALUES =====
+function getActiveNests() {
+    let active = 0;
+    for (let i = 0; i < state.nests; i++) {
+        const beesNeeded = BEES_PER_NEST;
+        const beesInNest = Math.floor((state.workers + state.soldiers) / Math.max(state.nests, 1));
+        if (beesInNest >= beesNeeded) active++;
+    }
+    // Simple: total bees across all nests vs nests * 10000
+    const totalBeesAssigned = state.workers + state.soldiers + state.queens;
+    const requiredForAll = state.nests * BEES_PER_NEST;
+    if (requiredForAll === 0) return 0;
+    return Math.min(state.nests, Math.floor(totalBeesAssigned / BEES_PER_NEST));
+}
+
+function getPassiveHoneyPerHour() {
+    const activeNests = getActiveNests();
+    let base = activeNests * PASSIVE_HONEY_PER_HOUR;
+    // Smoker bonus
+    base *= (1 + (state.smokerLevel - 1) * 0.1);
+    // Suit bonus
+    base *= (1 + (state.suitLevel - 1) * 0.05);
+    // Upgrade bonuses
+    let upgradeBonus = 0;
+    for (const card of UPGRADE_CARDS) {
+        if (state.upgrades[card.id]) {
+            if (card.id.startsWith('ph')) upgradeBonus += parseInt(card.desc.match(/\+(\d+)/)?.[1] || 0) / 100;
+            if (card.id === 'sp5') upgradeBonus += 0.05;
+        }
+    }
+    base *= (1 + upgradeBonus);
+    // Premium bonus
+    if (state.isPremium) base *= (1 + PREMIUM_HONEY_BONUS);
+    return Math.round(base);
+}
+
+function getBeePerConvert() {
+    let base = BEE_PER_CONVERT_BASE;
+    // Extractor level bonus
+    base += (state.extractorLevel - 1) * 2;
+    // Upgrade bonuses
+    for (const card of UPGRADE_CARDS) {
+        if (state.upgrades[card.id] && card.id.startsWith('tc')) {
+            base += parseInt(card.desc.match(/\+(\d+)/)?.[1] || 0);
+        }
+    }
+    if (state.upgrades['sp5']) base += 1;
+    return base;
+}
+
+function getGameBonusPerNectar() {
+    let bonus = 0;
+    for (const card of UPGRADE_CARDS) {
+        if (state.upgrades[card.id] && card.id.startsWith('gb')) {
+            bonus += parseInt(card.desc.match(/\+(\d+)/)?.[1] || 0);
+        }
+    }
+    if (state.upgrades['sp5']) bonus += 1;
+    return bonus;
+}
+
+function getMineChance() {
+    let chance = MINE_CHANCE;
+    for (const card of UPGRADE_CARDS) {
+        if (state.upgrades[card.id] && (card.id === 'sp3' || card.id === 'sp4')) {
+            const reduction = parseInt(card.desc.match(/-(\d+)/)?.[1] || 0) / 100;
+            chance -= reduction;
+        }
+    }
+    return Math.max(0.05, chance);
+}
+
+function getToolPrice(tool) {
+    const level = state[tool.id + 'Level'] || 1;
+    return Math.round(tool.basePrice * Math.pow(2.5, level - 1));
+}
+
+function getToolPriceTon(tool) {
+    const level = state[tool.id + 'Level'] || 1;
+    return +(tool.basePriceTon * Math.pow(2.5, level - 1)).toFixed(2);
+}
+
+function getBeeItemPrice(item) {
+    return item.basePrice + item.priceInc * state[item.id + 'Bought'];
+}
+
+function getBeeItemPriceTon(item) {
+    return +(item.basePriceTon * (1 + state[item.id + 'Bought'] * 0.2)).toFixed(2);
+}
+
+function getMaxTickets() {
+    let max = TICKETS_PER_RECHARGE;
+    for (const card of UPGRADE_CARDS) {
+        if (state.upgrades[card.id] && card.id.startsWith('te')) {
+            max += parseInt(card.desc.match(/\+(\d+)/)?.[1] || 0);
+        }
+    }
+    if (state.upgrades['sp5']) max += 5;
+    return max;
 }
 
 // ===== UI UPDATES =====
-function updateBalance() {
-    const el = document.getElementById('balance');
-    if (!el) return;
-    el.textContent = state.balance.toLocaleString('ru-RU');
-    el.style.transform = 'scale(1.2)';
-    setTimeout(() => { el.style.transform = 'scale(1)'; }, 200);
+function updateAllUI() {
+    updateBalances();
+    updateApiary();
+    updateExtractor();
+    updateTickets();
+    updateTicketTimerDisplay();
+    renderUpgradeGrid();
+    renderShopTools();
+    renderShopBees();
 }
 
-function updateCycleCount() {
-    const el = document.getElementById('cycleCount');
-    if (el) el.textContent = state.cycleCount;
+function updateBalances() {
+    const balEl = document.getElementById('balance');
+    const honeyEl = document.getElementById('honeyBalance');
+    if (balEl) {
+        balEl.textContent = formatNumber(state.balance);
+        balEl.style.transform = 'scale(1.2)';
+        setTimeout(() => { balEl.style.transform = 'scale(1)'; }, 200);
+    }
+    if (honeyEl) {
+        honeyEl.textContent = formatNumber(state.honey);
+    }
+}
+
+function updateApiary() {
+    setText('nestsCount', state.nests);
+    setText('queensCount', state.queens);
+    setText('workersCount', formatNumber(state.workers));
+    setText('soldiersCount', formatNumber(state.soldiers));
+    setText('activeNests', getActiveNests());
+    setText('passiveIncome', `+${getPassiveHoneyPerHour()} 🍯/час`);
+}
+
+function updateExtractor() {
+    setText('extractorLvl', `LVL ${state.extractorLevel}`);
+    setText('honeyStored', formatNumber(state.honey));
+    setText('beePerConvert', getBeePerConvert());
+
+    const progress = Math.min(state.honey / HONEY_PER_CONVERT, 1) * 100;
+    const fill = document.getElementById('extractorFill');
+    if (fill) fill.style.width = `${progress}%`;
+    setText('extractorProgress', `${state.honey} / ${HONEY_PER_CONVERT}`);
+
+    const btn = document.getElementById('extractorBtn');
+    if (btn) btn.disabled = state.honey < HONEY_PER_CONVERT;
 }
 
 function updateTickets() {
-    const el = document.getElementById('ticketsCount');
-    const mineEl = document.getElementById('mineTickets');
-    if (el) el.textContent = state.tickets;
-    if (mineEl) mineEl.textContent = state.tickets;
+    setText('ticketsCount', state.tickets);
+    setText('mineTickets', state.tickets);
 
     const playBtn = document.getElementById('playBtn');
-    if (playBtn) {
-        playBtn.disabled = state.tickets <= 0;
-    }
+    if (playBtn) playBtn.disabled = state.tickets <= 0;
+
+    // Also update play buttons in mine page
+    document.querySelectorAll('.mine-game-preview .play-btn').forEach(btn => {
+        btn.disabled = state.tickets <= 0;
+    });
+}
+
+function updateTicketTimerDisplay() {
+    const elapsed = Date.now() - state.lastTicketsUpdate;
+    const remaining = TICKET_RECHARGE_INTERVAL - elapsed;
+    const text = formatTime(Math.max(0, remaining));
+    setText('ticketsTimerText', text);
+    setText('mineTimer', text);
+}
+
+function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+function formatNumber(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 10000) return (n / 1000).toFixed(1) + 'K';
+    return n.toLocaleString('ru-RU');
 }
 
 function formatTime(ms) {
@@ -157,10 +421,13 @@ function formatTime(ms) {
 function checkTicketRecharge() {
     const now = Date.now();
     const elapsed = now - state.lastTicketsUpdate;
+    const maxTickets = getMaxTickets();
 
     if (elapsed >= TICKET_RECHARGE_INTERVAL) {
         const cycles = Math.floor(elapsed / TICKET_RECHARGE_INTERVAL);
-        state.tickets = Math.min(state.tickets + cycles * TICKETS_PER_RECHARGE, TICKETS_PER_RECHARGE);
+        let bonus = 0;
+        if (state.isPremium) bonus = PREMIUM_TICKET_BONUS;
+        state.tickets = Math.min(state.tickets + cycles * (1 + bonus), maxTickets);
         state.lastTicketsUpdate += cycles * TICKET_RECHARGE_INTERVAL;
         saveState();
     }
@@ -175,364 +442,176 @@ function startTicketTimer() {
     }, 1000);
 }
 
-function updateTicketTimerDisplay() {
-    const elapsed = Date.now() - state.lastTicketsUpdate;
-    const remaining = TICKET_RECHARGE_INTERVAL - elapsed;
-    const text = formatTime(Math.max(0, remaining));
-    const el = document.getElementById('ticketsTimerText');
-    const mineEl = document.getElementById('mineTimer');
-    if (el) el.textContent = text;
-    if (mineEl) mineEl.textContent = text;
-}
-
-// ===== COLLECTION (8-hour cycle) =====
-function handleAction() {
-    if (state.isCollecting) {
-        if (Date.now() - state.startTime >= COLLECTION_DURATION) {
-            collectReward();
-        }
-    } else {
-        startCollection();
-    }
-}
-
-function startCollection() {
-    state.isCollecting = true;
-    state.startTime = Date.now();
-    saveState();
-    setCollectingMode();
-    startCollectionTimer();
-    haptic('medium');
-    showToast('Пчёлы вылетели за нектаром!');
-}
-
-function collectReward() {
-    state.balance += REWARD_PER_CYCLE;
-    state.cycleCount++;
-    state.isCollecting = false;
-    state.startTime = null;
-    saveState();
-    updateBalance();
-    updateCycleCount();
-    setStartMode();
-    haptic('success');
-    showToast(`+${REWARD_PER_CYCLE} $BEE начислено!`);
-    sendBotData({ action: 'collect_reward', amount: REWARD_PER_CYCLE, balance: state.balance });
-}
-
-function setCollectingMode() {
-    const btn = document.getElementById('collectionBtn');
-    const text = document.getElementById('collectionBtnText');
-    const status = document.getElementById('collectionStatus');
-    const progressWrap = document.getElementById('collectionProgressWrap');
-    const card = document.getElementById('collectionCard');
-
-    btn.classList.remove('ready');
-    text.textContent = 'Сбор нектара...';
-    btn.disabled = true;
-    status.textContent = 'Сбор...';
-    status.classList.add('collecting');
-    progressWrap.style.display = 'block';
-    card.classList.add('active');
-}
-
-function setReadyToCollectMode() {
-    const btn = document.getElementById('collectionBtn');
-    const text = document.getElementById('collectionBtnText');
-    const status = document.getElementById('collectionStatus');
-    const fill = document.getElementById('progressFill');
-    const card = document.getElementById('collectionCard');
-
-    btn.disabled = false;
-    btn.classList.add('ready');
-    text.textContent = '🍯 Забрать мёд';
-    status.textContent = 'Готово!';
-    status.classList.remove('collecting');
-    fill.style.width = '100%';
-    document.getElementById('progressTime').textContent = '0:00:00';
-    document.getElementById('progressPercent').textContent = '100%';
-}
-
-function setStartMode() {
-    const btn = document.getElementById('collectionBtn');
-    const text = document.getElementById('collectionBtnText');
-    const status = document.getElementById('collectionStatus');
-    const progressWrap = document.getElementById('collectionProgressWrap');
-    const card = document.getElementById('collectionCard');
-
-    btn.disabled = false;
-    btn.classList.remove('ready');
-    text.textContent = 'Запустить сбор';
-    status.textContent = 'Готов';
-    status.classList.remove('collecting');
-    progressWrap.style.display = 'none';
-    card.classList.remove('active');
-}
-
-function startCollectionTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-
-    timerInterval = setInterval(() => {
-        const elapsed = Date.now() - state.startTime;
-        const remaining = COLLECTION_DURATION - elapsed;
-        const progress = Math.min(elapsed / COLLECTION_DURATION, 1);
-
-        if (remaining <= 0) {
-            clearInterval(timerInterval);
-            state.isCollecting = false;
-            saveState();
-            setReadyToCollectMode();
-            haptic('success');
-            return;
-        }
-
-        document.getElementById('progressFill').style.width = `${progress * 100}%`;
-        document.getElementById('progressTime').textContent = formatTime(remaining);
-        document.getElementById('progressPercent').textContent = `${Math.floor(progress * 100)}%`;
-    }, 1000);
-}
-
-// ===== QUEEN BEE TAP =====
-let lastTapTime = 0;
-
-function handleQueenTap(e) {
+// ===== PASSIVE HONEY PRODUCTION =====
+function processPassiveHoney() {
     const now = Date.now();
-    if (now - lastTapTime < 50) return; // debounce 50ms
-    lastTapTime = now;
+    const elapsed = now - state.lastPassiveUpdate;
+    const hours = elapsed / (1000 * 60 * 60);
+    const honeyRate = getPassiveHoneyPerHour();
 
-    e.preventDefault();
-    state.tapCount++;
-    state.balance += 1;
-    saveState();
-    updateBalance();
-    haptic('light');
-    spawnTapFloat(e);
+    if (honeyRate > 0 && hours > 0.001) {
+        const produced = Math.floor(honeyRate * hours);
+        if (produced > 0) {
+            state.honey += produced;
+            state.lastPassiveUpdate = now;
+            saveState();
+            updateBalances();
+            updateExtractor();
+        }
+    }
+    state.lastPassiveUpdate = now;
 }
 
-function spawnTapFloat(e) {
-    const queen = document.getElementById('queenBee');
-    const rect = queen.getBoundingClientRect();
-    const el = document.createElement('div');
-    el.className = 'tap-float';
-    el.textContent = '+1';
-
-    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left + (Math.random() * 20 - 10);
-    const y = -10;
-
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    queen.appendChild(el);
-
-    setTimeout(() => el.remove(), 800);
+function startPassiveTimer() {
+    if (passiveTimer) clearInterval(passiveTimer);
+    passiveTimer = setInterval(() => {
+        processPassiveHoney();
+    }, 10000); // every 10 seconds
 }
 
-// ===== GAME (Blum-style) =====
-let gameState = {
-    active: false,
-    score: 0,
-    timeLeft: GAME_DURATION,
-    spawnTimer: null,
-    countdownTimer: null,
-    nectars: [],
-};
-
-function startGame() {
-    if (state.tickets <= 0) {
-        showToast('Нет билетов!');
+// ===== HONEY EXTRACTOR =====
+function processHoney() {
+    if (state.honey < HONEY_PER_CONVERT) {
+        showToast('Недостаточно мёда!');
         return;
     }
 
-    state.tickets--;
-    saveState();
-    updateTickets();
-
-    gameState = { active: true, score: 0, timeLeft: GAME_DURATION, spawnTimer: null, countdownTimer: null, nectars: [] };
-
-    document.getElementById('gameModal').style.display = 'flex';
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameTimer').textContent = GAME_DURATION;
-    document.getElementById('gameStartOverlay').style.display = 'flex';
-
-    document.querySelector('.bottom-nav').classList.add('game-active');
-    document.querySelector('.app-header').classList.add('game-active');
-    document.body.classList.add('game-mode');
-
-    haptic('medium');
-
-    setTimeout(() => {
-        document.getElementById('gameStartOverlay').style.display = 'none';
-        runGame();
-    }, 1500);
-}
-
-function runGame() {
-    gameState.active = true;
-
-    gameState.spawnTimer = setInterval(spawnNectar, NECTAR_SPAWN_INTERVAL);
-
-    gameState.countdownTimer = setInterval(() => {
-        gameState.timeLeft--;
-        document.getElementById('gameTimer').textContent = gameState.timeLeft;
-
-        if (gameState.timeLeft <= 5) {
-            document.getElementById('gameTimer').style.color = '#FC8181';
-        }
-
-        if (gameState.timeLeft <= 0) {
-            endGame();
-        }
-    }, 1000);
-
-    // Start animation loop
-    requestAnimationFrame(animateNectars);
-}
-
-function spawnNectar() {
-    if (!gameState.active) return;
-
-    const field = document.getElementById('gameField');
-    const fieldRect = field.getBoundingClientRect();
-
-    const nectar = document.createElement('div');
-    nectar.className = 'nectar' + (Math.random() < 0.15 ? ' nectar--gold' : '');
-    const type = NECTAR_TYPES[Math.floor(Math.random() * NECTAR_TYPES.length)];
-    nectar.textContent = type;
-
-    const x = Math.random() * (fieldRect.width - 48);
-    nectar.style.left = `${x}px`;
-    nectar.style.top = '-50px';
-
-    const speed = 1.5 + Math.random() * 2; // px per frame
-    const wobble = (Math.random() - 0.5) * 0.5;
-    const isGold = nectar.classList.contains('nectar--gold');
-
-    nectar.addEventListener('click', (e) => {
-        e.stopPropagation();
-        collectNectar(nectar, isGold);
-    });
-
-    field.appendChild(nectar);
-    gameState.nectars.push({ el: nectar, x, y: -50, speed, wobble, alive: true });
-
-    requestAnimationFrame(() => {
-        nectar.style.transition = 'left 0.3s ease';
-    });
-}
-
-function collectNectar(el, isGold) {
-    if (!el.classList.contains('nectar') || el.classList.contains('nectar-collect')) return;
-
-    const points = isGold ? 5 : 1;
-    gameState.score += points;
-
-    document.getElementById('gameScore').textContent = gameState.score;
-    document.getElementById('gameScore').style.transform = 'scale(1.3)';
-    setTimeout(() => { document.getElementById('gameScore').style.transform = 'scale(1)'; }, 150);
-
-    el.classList.add('nectar-collect');
-    haptic('light');
-
-    // Mark as dead in gameState so animation loop skips it
-    const nectarObj = gameState.nectars.find(n => n.el === el);
-    if (nectarObj) nectarObj.alive = false;
-
-    setTimeout(() => {
-        el.remove();
-    }, 300);
-}
-
-function animateNectars() {
-    if (!gameState.active) return;
-
-    const field = document.getElementById('gameField');
-    const fieldHeight = field.getBoundingClientRect().height;
-
-    gameState.nectars.forEach(n => {
-        if (!n.alive) return;
-        n.y += n.speed;
-        n.x += n.wobble;
-        n.el.style.top = `${n.y}px`;
-        n.el.style.left = `${n.x}px`;
-
-        if (n.y > fieldHeight + 50) {
-            n.alive = false;
-            n.el.remove();
-        }
-    });
-
-    gameState.nectars = gameState.nectars.filter(n => n.alive);
-
-    if (gameState.active) {
-        requestAnimationFrame(animateNectars);
-    }
-}
-
-function endGame() {
-    gameState.active = false;
-    clearInterval(gameState.spawnTimer);
-    clearInterval(gameState.countdownTimer);
-
-    // Remove all remaining nectars
-    gameState.nectars.forEach(n => { if (n.el.parentNode) n.el.remove(); });
-    gameState.nectars = [];
-
-    // Add earnings to balance
-    const earned = gameState.score;
+    state.honey -= HONEY_PER_CONVERT;
+    const earned = getBeePerConvert();
     state.balance += earned;
     saveState();
-    updateBalance();
-
-    document.getElementById('gameTimer').style.color = '';
-
-    // Show result
-    setTimeout(() => {
-        document.getElementById('gameModal').style.display = 'none';
-        document.getElementById('resultAmount').textContent = earned;
-        document.getElementById('resultModal').style.display = 'flex';
-
-        document.querySelector('.bottom-nav').classList.remove('game-active');
-        document.querySelector('.app-header').classList.remove('game-active');
-        document.body.classList.remove('game-mode');
-
-        haptic('success');
-
-        sendBotData({ action: 'game_result', earned, balance: state.balance });
-    }, 300);
+    updateBalances();
+    updateExtractor();
+    haptic('success');
+    showToast(`+${earned} $BEE!`);
+    sendBotData({ action: 'extract_honey', earned, balance: state.balance, honey: state.honey });
 }
 
-function closeResultModal() {
-    document.getElementById('resultModal').style.display = 'none';
+// ===== SHOP: TOOLS =====
+function renderShopTools() {
+    const container = document.getElementById('shopTools');
+    if (!container) return;
+    container.innerHTML = '';
+
+    TOOLS.forEach((tool, i) => {
+        const level = state[tool.id + 'Level'] || 1;
+        const price = getToolPrice(tool);
+        const priceTon = getToolPriceTon(tool);
+        const canAfford = state.balance >= price;
+
+        const card = document.createElement('div');
+        card.className = `shop-card${canAfford ? '' : ' shop-card--disabled'}`;
+        card.style.animationDelay = `${0.05 + i * 0.05}s`;
+        card.onclick = () => openPaymentModal({ ...tool, priceBee: price, priceTon: priceTon, isTool: true });
+        card.innerHTML = `
+            <div class="shop-card-icon">${tool.icon}</div>
+            <div class="shop-card-info">
+                <div class="shop-card-name">${tool.name}</div>
+                <div class="shop-card-desc">${tool.desc}</div>
+            </div>
+            <div class="shop-card-right">
+                <div class="shop-card-price">${formatNumber(price)} $BEE</div>
+                <div class="shop-card-level">LVL ${level} → ${level + 1}</div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
 }
 
-// ===== NAVIGATION =====
-function switchPage(pageId, navBtn) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+// ===== SHOP: BEES =====
+function renderShopBees() {
+    const container = document.getElementById('shopBees');
+    if (!container) return;
+    container.innerHTML = '';
 
-    document.getElementById(pageId).classList.add('active');
-    navBtn.classList.add('active');
-    haptic('light');
+    BEE_ITEMS.forEach((item, i) => {
+        const bought = state[item.id + 'Bought'] || 0;
+        const currentAmount = state[item.id] || 0;
+        const price = getBeeItemPrice(item);
+        const priceTon = getBeeItemPriceTon(item);
+        const canAfford = state.balance >= price;
+        const atMax = currentAmount >= item.maxAmount;
+
+        const card = document.createElement('div');
+        card.className = `shop-card${canAfford && !atMax ? '' : ' shop-card--disabled'}`;
+        card.style.animationDelay = `${0.05 + i * 0.05}s`;
+        if (!atMax) {
+            card.onclick = () => openPaymentModal({ ...item, priceBee: price, priceTon: priceTon, isBeeItem: true });
+        }
+        card.innerHTML = `
+            <div class="shop-card-icon">${item.icon}</div>
+            <div class="shop-card-info">
+                <div class="shop-card-name">${item.name}</div>
+                <div class="shop-card-desc">${item.desc}</div>
+            </div>
+            <div class="shop-card-right">
+                <div class="shop-card-price">${atMax ? 'МАКС' : formatNumber(price) + ' $BEE'}</div>
+                <div class="shop-card-count">Куплено: ${bought} шт.</div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
 }
 
-// ===== SHOP =====
-function renderShop() {
-    const grid = document.getElementById('shopGrid');
+// ===== UPGRADE GRID (50 cards) =====
+function renderUpgradeGrid() {
+    const grid = document.getElementById('upgradeGrid');
+    if (!grid) return;
     grid.innerHTML = '';
 
-    SHOP_ITEMS.forEach((item, i) => {
-        const card = document.createElement('div');
-        card.className = 'shop-card';
-        card.style.animationDelay = `${0.1 + i * 0.05}s`;
-        card.onclick = () => openPaymentModal(item);
-        card.innerHTML = `
-            <div class="shop-item-icon">${item.icon}</div>
-            <div class="shop-item-name">${item.name}</div>
-            <span class="shop-price-tag shop-price-tag--bee">${item.priceBee} $BEE</span>
-            <div class="shop-price-divider">или</div>
-            <span class="shop-price-tag shop-price-tag--ton">${item.priceTon} TON</span>
+    UPGRADE_CARDS.forEach((card, i) => {
+        const purchased = !!state.upgrades[card.id];
+        const canAfford = state.balance >= card.price;
+
+        const el = document.createElement('div');
+        el.className = `upgrade-card${purchased ? ' purchased' : ''}`;
+        el.style.animationDelay = `${Math.min(0.02 * i, 0.8)}s`;
+
+        if (!purchased && canAfford) {
+            el.onclick = () => buyUpgrade(card);
+        } else if (!purchased) {
+            el.style.opacity = '0.5';
+        }
+
+        el.innerHTML = `
+            <div class="upgrade-icon">${card.icon}</div>
+            <div class="upgrade-name">${card.name}</div>
+            <div class="upgrade-desc">${card.desc}</div>
+            ${purchased
+                ? '<div class="upgrade-buy-label">✅ Куплено</div>'
+                : `<div class="upgrade-cost">${formatNumber(card.price)} $BEE</div>`
+            }
         `;
-        grid.appendChild(card);
+        grid.appendChild(el);
     });
+}
+
+function buyUpgrade(card) {
+    if (state.upgrades[card.id]) {
+        showToast('Уже куплено!');
+        return;
+    }
+    if (state.balance < card.price) {
+        showToast('Недостаточно токенов!');
+        return;
+    }
+
+    state.balance -= card.price;
+    state.upgrades[card.id] = true;
+
+    // Recalculate derived bonuses
+    recalculateBonuses();
+    saveState();
+    updateAllUI();
+    haptic('success');
+    showToast(`Улучшено: ${card.name}!`);
+    sendBotData({ action: 'buy_upgrade', cardId: card.id, balance: state.balance });
+}
+
+function recalculateBonuses() {
+    state.gameBonusPerNectar = getGameBonusPerNectar();
+    state.mineChanceReduction = MINE_CHANCE - getMineChance();
+    state.convertBonus = getBeePerConvert() - BEE_PER_CONVERT_BASE;
 }
 
 // ===== PAYMENT MODAL =====
@@ -541,7 +620,7 @@ let currentModalItem = null;
 function openPaymentModal(item) {
     currentModalItem = item;
     document.getElementById('modalItemName').textContent = `Купить «${item.name}»`;
-    document.getElementById('payBeePrice').textContent = `${item.priceBee} $BEE`;
+    document.getElementById('payBeePrice').textContent = `${formatNumber(item.priceBee)} $BEE`;
     document.getElementById('payTonPrice').textContent = `${item.priceTon} TON`;
 
     const tonBtn = document.getElementById('payWithTon');
@@ -586,12 +665,28 @@ function buyItemBee(item) {
     }
 
     state.balance -= item.priceBee;
-    state.items[item.id] = (state.items[item.id] || 0) + 1;
+
+    if (item.isTool) {
+        state[item.id + 'Level'] = (state[item.id + 'Level'] || 1) + 1;
+        recalculateBonuses();
+    } else if (item.isBeeItem) {
+        const current = state[item.id] || 0;
+        if (current + item.amount > item.maxAmount) {
+            state.balance += item.priceBee;
+            showToast('Достигнут максимум!');
+            closePaymentModal();
+            return;
+        }
+        state[item.id] = current + item.amount;
+        state[item.id + 'Bought'] = (state[item.id + 'Bought'] || 0) + 1;
+    }
+
     saveState();
-    updateBalance();
+    updateAllUI();
     haptic('light');
     showToast(`Куплено: ${item.name}!`);
     closePaymentModal();
+    sendBotData({ action: 'buy_bee', itemId: item.id, balance: state.balance });
 }
 
 async function buyItemTon(item) {
@@ -621,8 +716,16 @@ async function buyItemTon(item) {
         showToast('Откройте кошелёк для подтверждения...');
         const result = await tonConnectUI.sendTransaction(transaction);
 
-        state.items[item.id] = (state.items[item.id] || 0) + 1;
+        if (item.isTool) {
+            state[item.id + 'Level'] = (state[item.id + 'Level'] || 1) + 1;
+            recalculateBonuses();
+        } else if (item.isBeeItem) {
+            state[item.id] = (state[item.id] || 0) + item.amount;
+            state[item.id + 'Bought'] = (state[item.id + 'Bought'] || 0) + 1;
+        }
+
         saveState();
+        updateAllUI();
         haptic('success');
         showToast(`Куплено: ${item.name}!`);
 
@@ -641,6 +744,315 @@ async function buyItemTon(item) {
     }
 
     closePaymentModal();
+}
+
+// ===== GAME (Blum-style with Mines) =====
+let gameState = {
+    active: false,
+    score: 0,
+    timeLeft: GAME_DURATION,
+    spawnTimer: null,
+    countdownTimer: null,
+    nectars: [],
+};
+
+function startGame() {
+    if (state.tickets <= 0) {
+        showToast('Нет билетов!');
+        return;
+    }
+
+    state.tickets--;
+    saveState();
+    updateTickets();
+
+    const bonus = getGameBonusPerNectar();
+    gameState = {
+        active: true,
+        score: 0,
+        timeLeft: GAME_DURATION,
+        spawnTimer: null,
+        countdownTimer: null,
+        nectars: [],
+        bonusPerNectar: bonus,
+        mineChance: getMineChance(),
+    };
+
+    document.getElementById('gameModal').style.display = 'flex';
+    document.getElementById('gameScore').textContent = '0';
+    document.getElementById('gameTimer').textContent = GAME_DURATION;
+    document.getElementById('gameTimer').style.color = '';
+    document.getElementById('gameStartOverlay').style.display = 'flex';
+
+    document.querySelector('.bottom-nav').classList.add('game-active');
+    document.querySelector('.app-header').classList.add('game-active');
+    document.body.classList.add('game-mode');
+
+    haptic('medium');
+
+    setTimeout(() => {
+        document.getElementById('gameStartOverlay').style.display = 'none';
+        runGame();
+    }, 1500);
+}
+
+function runGame() {
+    gameState.active = true;
+
+    gameState.spawnTimer = setInterval(spawnNectar, NECTAR_SPAWN_INTERVAL);
+
+    gameState.countdownTimer = setInterval(() => {
+        gameState.timeLeft--;
+        document.getElementById('gameTimer').textContent = gameState.timeLeft;
+
+        if (gameState.timeLeft <= 5) {
+            document.getElementById('gameTimer').style.color = '#FC8181';
+        }
+
+        if (gameState.timeLeft <= 0) {
+            endGame();
+        }
+    }, 1000);
+
+    requestAnimationFrame(animateNectars);
+}
+
+function spawnNectar() {
+    if (!gameState.active) return;
+
+    const field = document.getElementById('gameField');
+    const fieldRect = field.getBoundingClientRect();
+
+    const isMine = Math.random() < gameState.mineChance;
+
+    const el = document.createElement('div');
+    el.className = 'nectar' + (isMine ? ' nectar--mine' : '');
+
+    if (isMine) {
+        el.textContent = MINE_TYPES[Math.floor(Math.random() * MINE_TYPES.length)];
+    } else {
+        el.textContent = NECTAR_TYPES[Math.floor(Math.random() * NECTAR_TYPES.length)];
+    }
+
+    const x = Math.random() * (fieldRect.width - 48);
+    el.style.left = `${x}px`;
+    el.style.top = '-50px';
+
+    const speed = 1.5 + Math.random() * 2;
+    const wobble = (Math.random() - 0.5) * 0.5;
+
+    el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isMine) {
+            hitMine(el);
+        } else {
+            collectNectar(el);
+        }
+    });
+
+    field.appendChild(el);
+    gameState.nectars.push({ el, x, y: -50, speed, wobble, alive: true, isMine });
+}
+
+function collectNectar(el) {
+    if (!el.classList.contains('nectar') || el.classList.contains('nectar-collect')) return;
+
+    const points = 1 + gameState.bonusPerNectar;
+    gameState.score += points;
+
+    document.getElementById('gameScore').textContent = gameState.score;
+    document.getElementById('gameScore').style.transform = 'scale(1.3)';
+    setTimeout(() => { document.getElementById('gameScore').style.transform = 'scale(1)'; }, 150);
+
+    el.classList.add('nectar-collect');
+    haptic('light');
+
+    spawnFloatText(el, `+${points}`, 'positive');
+
+    const nectarObj = gameState.nectars.find(n => n.el === el);
+    if (nectarObj) nectarObj.alive = false;
+
+    setTimeout(() => el.remove(), 300);
+}
+
+function hitMine(el) {
+    if (!el.classList.contains('nectar') || el.classList.contains('nectar-mine-hit')) return;
+
+    gameState.score = Math.max(0, gameState.score - MINE_PENALTY);
+
+    document.getElementById('gameScore').textContent = gameState.score;
+    document.getElementById('gameScore').style.transform = 'scale(1.3)';
+    setTimeout(() => { document.getElementById('gameScore').style.transform = 'scale(1)'; }, 150);
+
+    el.classList.add('nectar-mine-hit');
+    haptic('error');
+
+    spawnFloatText(el, `-${MINE_PENALTY}`, 'negative');
+
+    // Screen shake
+    const field = document.getElementById('gameField');
+    field.classList.add('shake');
+    setTimeout(() => field.classList.remove('shake'), 400);
+
+    const nectarObj = gameState.nectars.find(n => n.el === el);
+    if (nectarObj) nectarObj.alive = false;
+
+    setTimeout(() => el.remove(), 500);
+}
+
+function spawnFloatText(el, text, type) {
+    const field = document.getElementById('gameField');
+    const rect = el.getBoundingClientRect();
+    const fieldRect = field.getBoundingClientRect();
+
+    const floater = document.createElement('div');
+    floater.className = `tap-float tap-float--${type}`;
+    floater.textContent = text;
+    floater.style.left = `${rect.left - fieldRect.left + 10}px`;
+    floater.style.top = `${rect.top - fieldRect.top - 10}px`;
+
+    field.appendChild(floater);
+    setTimeout(() => floater.remove(), 800);
+}
+
+function animateNectars() {
+    if (!gameState.active) return;
+
+    const field = document.getElementById('gameField');
+    const fieldHeight = field.getBoundingClientRect().height;
+
+    gameState.nectars.forEach(n => {
+        if (!n.alive) return;
+        n.y += n.speed;
+        n.x += n.wobble;
+        n.el.style.top = `${n.y}px`;
+        n.el.style.left = `${n.x}px`;
+
+        if (n.y > fieldHeight + 50) {
+            n.alive = false;
+            n.el.remove();
+        }
+    });
+
+    gameState.nectars = gameState.nectars.filter(n => n.alive);
+
+    if (gameState.active) {
+        requestAnimationFrame(animateNectars);
+    }
+}
+
+function endGame() {
+    gameState.active = false;
+    clearInterval(gameState.spawnTimer);
+    clearInterval(gameState.countdownTimer);
+
+    gameState.nectars.forEach(n => { if (n.el.parentNode) n.el.remove(); });
+    gameState.nectars = [];
+
+    const earned = gameState.score;
+    state.balance += earned;
+    saveState();
+    updateBalances();
+
+    document.getElementById('gameTimer').style.color = '';
+
+    setTimeout(() => {
+        document.getElementById('gameModal').style.display = 'none';
+        document.getElementById('resultAmount').textContent = earned;
+        document.getElementById('resultModal').style.display = 'flex';
+
+        document.querySelector('.bottom-nav').classList.remove('game-active');
+        document.querySelector('.app-header').classList.remove('game-active');
+        document.body.classList.remove('game-mode');
+
+        haptic('success');
+        sendBotData({ action: 'game_result', earned, balance: state.balance });
+    }, 300);
+}
+
+function closeGame() {
+    if (gameState.active) {
+        endGame();
+    } else {
+        document.getElementById('gameModal').style.display = 'none';
+        document.querySelector('.bottom-nav').classList.remove('game-active');
+        document.querySelector('.app-header').classList.remove('game-active');
+        document.body.classList.remove('game-mode');
+    }
+}
+
+function closeResultModal() {
+    document.getElementById('resultModal').style.display = 'none';
+}
+
+// ===== LEADERBOARD =====
+async function loadLeaderboard() {
+    const cupList = document.getElementById('cupList');
+    if (!cupList) return;
+
+    // Try fetching from API
+    if (API_URL) {
+        try {
+            const userId = tg?.initDataUnsafe?.user?.id || 0;
+            const resp = await fetch(`${API_URL}/api/leaderboard?user_id=${userId}`);
+            const data = await resp.json();
+            renderLeaderboard(data.top, data.userRank);
+            return;
+        } catch (e) {
+            console.warn('Leaderboard API unavailable, using local data');
+        }
+    }
+
+    // Fallback: send request to bot
+    sendBotData({ action: 'get_leaderboard' });
+    cupList.innerHTML = '<div class="cup-loading">Откройте чат бота для просмотра рейтинга<br>или настройте API_URL</div>';
+}
+
+function renderLeaderboard(top, userRank) {
+    const cupList = document.getElementById('cupList');
+    if (!cupList) return;
+
+    if (!top || top.length === 0) {
+        cupList.innerHTML = '<div class="cup-loading">Пока нет данных о рейтинге</div>';
+        return;
+    }
+
+    cupList.innerHTML = '';
+
+    top.forEach((user, i) => {
+        const entry = document.createElement('div');
+        entry.className = 'cup-entry';
+        const medals = ['🥇', '🥈', '🥉'];
+        const rank = i < 3 ? medals[i] : `${i + 1}`;
+
+        entry.innerHTML = `
+            <div class="cup-rank">${rank}</div>
+            <div class="cup-user-info">
+                <div class="cup-username">${user.username || 'Игрок'}</div>
+            </div>
+            <div class="cup-user-score">${formatNumber(user.balance)} $BEE</div>
+        `;
+        cupList.appendChild(entry);
+    });
+
+    if (userRank) {
+        setText('cupMyPlace', `№${userRank}`);
+    }
+}
+
+// ===== NAVIGATION =====
+function switchPage(pageId, navBtn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+    document.getElementById(pageId).classList.add('active');
+    navBtn.classList.add('active');
+    haptic('light');
+
+    // Load leaderboard when switching to Cup tab
+    if (pageId === 'pageCup') {
+        loadLeaderboard();
+    }
 }
 
 // ===== REFERRALS =====
@@ -693,7 +1105,7 @@ function sendBotData(data) {
 }
 
 let toastTimeout = null;
-function showToast(message) {
+function showToast(message, isError = false) {
     let toast = document.querySelector('.toast');
     if (!toast) {
         toast = document.createElement('div');
@@ -701,6 +1113,7 @@ function showToast(message) {
         document.body.appendChild(toast);
     }
     toast.textContent = message;
+    toast.className = 'toast' + (isError ? ' toast--error' : '');
     toast.classList.add('show');
     if (toastTimeout) clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
@@ -710,43 +1123,15 @@ function showToast(message) {
 function init() {
     loadState();
     checkTicketRecharge();
+    processPassiveHoney();
+    recalculateBonuses();
 
-    // Queen Bee tap — unified touch/mouse handler
-    const queenEl = document.getElementById('queenBee');
-    if (queenEl) {
-        let touchHandled = false;
-        queenEl.addEventListener('touchstart', (e) => {
-            touchHandled = true;
-            handleQueenTap(e);
-        }, { passive: false });
-        queenEl.addEventListener('mousedown', (e) => {
-            if (touchHandled) { touchHandled = false; return; }
-            handleQueenTap(e);
-        });
-    }
-
-    // Restore collection state
-    if (state.isCollecting && state.startTime) {
-        if (Date.now() - state.startTime >= COLLECTION_DURATION) {
-            state.isCollecting = false;
-            saveState();
-            setReadyToCollectMode();
-        } else {
-            setCollectingMode();
-            startCollectionTimer();
-        }
-    } else {
-        setStartMode();
-    }
-
-    updateBalance();
-    updateCycleCount();
-    updateTickets();
-    updateTicketTimerDisplay();
-    renderShop();
+    updateAllUI();
+    renderUpgradeGrid();
     setupReferrals();
     initTonConnect();
     startTicketTimer();
+    startPassiveTimer();
 }
 
 document.addEventListener('DOMContentLoaded', init);

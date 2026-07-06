@@ -22,6 +22,10 @@
                 <span class="balance-coin">🪙</span>
                 <span class="balance-amount" id="balance">0</span>
             </div>
+            <div class="balance-pill balance-pill--honey" id="honeyPill">
+                <span class="balance-honey">🍯</span>
+                <span class="balance-amount" id="honeyBalance">0</span>
+            </div>
             <button class="wallet-btn" id="walletBtn" onclick="handleWalletClick()">
                 <span class="wallet-icon" id="walletIcon">💎</span>
                 <span class="wallet-text" id="walletText">Connect</span>
@@ -35,32 +39,73 @@
         <!-- === ГЛАВНАЯ === -->
         <section class="page active" id="pageMain">
             <div class="page-inner">
+
                 <!-- Билеты -->
                 <div class="tickets-bar">
                     <div class="tickets-info">
                         <span class="tickets-icon">🎟️</span>
                         <span class="tickets-label">Билеты:</span>
-                        <span class="tickets-count" id="ticketsCount">50</span>
+                        <span class="tickets-count" id="ticketsCount">5</span>
                     </div>
                     <div class="tickets-timer" id="ticketsTimer">
                         <span class="tickets-timer-icon">⏱️</span>
-                        <span id="ticketsTimerText">8:00:00</span>
+                        <span id="ticketsTimerText">1:00:00</span>
                     </div>
                 </div>
 
-                <!-- Королева-Пчела -->
-                <div class="queen-section">
-                    <div class="queen-glow"></div>
-                    <div class="queen-ring queen-ring--outer"></div>
-                    <div class="queen-ring queen-ring--inner"></div>
-                    <div class="queen-bee" id="queenBee">
-                        <div class="queen-emoji">👑🐝</div>
-                        <div class="queen-label">Матка</div>
+                <!-- Блок "Моя Пасека" -->
+                <div class="apiary-block">
+                    <div class="apiary-glow"></div>
+                    <div class="apiary-title">Моя Пасека</div>
+                    <div class="apiary-grid">
+                        <div class="apiary-stat">
+                            <div class="apiary-stat-icon">🛖</div>
+                            <div class="apiary-stat-label">Гнёзда</div>
+                            <div class="apiary-stat-value"><span id="nestsCount">0</span> / 10</div>
+                        </div>
+                        <div class="apiary-stat">
+                            <div class="apiary-stat-icon">👑</div>
+                            <div class="apiary-stat-label">Королевы</div>
+                            <div class="apiary-stat-value"><span id="queensCount">0</span> / 10</div>
+                        </div>
+                        <div class="apiary-stat">
+                            <div class="apiary-stat-icon">🐝</div>
+                            <div class="apiary-stat-label">Рабочие</div>
+                            <div class="apiary-stat-value"><span id="workersCount">0</span> / 800K</div>
+                        </div>
+                        <div class="apiary-stat">
+                            <div class="apiary-stat-icon">🪖</div>
+                            <div class="apiary-stat-label">Солдаты</div>
+                            <div class="apiary-stat-value"><span id="soldiersCount">0</span> / 200K</div>
+                        </div>
                     </div>
-                    <div class="tap-counter">
-                        <span>Tap per sec: </span>
-                        <span class="tap-tps" id="tapTps">1</span>
+                    <div class="apiary-active">
+                        <span class="apiary-active-label">Активных гнёзд:</span>
+                        <span class="apiary-active-value" id="activeNests">0</span>
+                        <span class="apiary-active-sub" id="passiveIncome">+0 🍯/час</span>
                     </div>
+                </div>
+
+                <!-- Медогонка -->
+                <div class="extractor-card">
+                    <div class="extractor-header">
+                        <div class="extractor-title">
+                            <span class="extractor-icon">⚙️</span>
+                            <span>Медогонка <span class="lvl-badge" id="extractorLvl">LVL 1</span></span>
+                        </div>
+                        <div class="extractor-info">
+                            <span id="honeyStored">0</span> 🍯 → <span id="beePerConvert">10</span> $BEE
+                        </div>
+                    </div>
+                    <div class="extractor-bar-wrap">
+                        <div class="extractor-bar">
+                            <div class="extractor-bar-fill" id="extractorFill"></div>
+                        </div>
+                        <span class="extractor-bar-label" id="extractorProgress">0 / 100</span>
+                    </div>
+                    <button class="extractor-btn" id="extractorBtn" onclick="processHoney()">
+                        <span>🍯 Качать мёд</span>
+                    </button>
                 </div>
 
                 <!-- Кнопка Играть -->
@@ -70,64 +115,26 @@
                     <span class="play-btn-cost">-1 🎟️</span>
                 </button>
 
-                <!-- Статистика -->
-                <div class="stats-row">
-                    <div class="stat-card">
-                        <div class="stat-icon">⏱️</div>
-                        <div class="stat-label">Добыча</div>
-                        <div class="stat-value">8 часов</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">🏆</div>
-                        <div class="stat-label">Циклов</div>
-                        <div class="stat-value" id="cycleCount">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">🍯</div>
-                        <div class="stat-label">Награда</div>
-                        <div class="stat-value">+100 $BEE</div>
-                    </div>
-                </div>
-
-                <!-- Прогресс сбора -->
-                <div class="collection-card" id="collectionCard">
-                    <div class="collection-header">
-                        <span class="collection-title">🍯 Сбор нектара</span>
-                        <span class="collection-status" id="collectionStatus">Готов</span>
-                    </div>
-                    <div class="collection-progress-wrap" id="collectionProgressWrap" style="display:none;">
-                        <div class="collection-progress-bar">
-                            <div class="collection-progress-fill" id="progressFill"></div>
-                        </div>
-                        <div class="collection-progress-info">
-                            <span id="progressTime">8:00:00</span>
-                            <span id="progressPercent">0%</span>
-                        </div>
-                    </div>
-                    <button class="collection-btn" id="collectionBtn" onclick="handleAction()">
-                        <span id="collectionBtnText">Запустить сбор</span>
-                    </button>
-                </div>
             </div>
         </section>
 
-        <!-- === ДОБЫЧА (Mine) === -->
+        <!-- === ДОБЫЧА (50 Upgrade Cards) === -->
         <section class="page" id="pageMine">
             <div class="page-inner">
                 <h2 class="page-title">⛏️ Добыча</h2>
                 <div class="mine-info-card">
                     <div class="mine-info-row">
                         <span class="mine-info-label">Билетов осталось:</span>
-                        <span class="mine-info-value" id="mineTickets">50</span>
+                        <span class="mine-info-value" id="mineTickets">5</span>
                     </div>
                     <div class="mine-info-row">
                         <span class="mine-info-label">Следующее пополнение:</span>
-                        <span class="mine-info-value" id="mineTimer">8:00:00</span>
+                        <span class="mine-info-value" id="mineTimer">1:00:00</span>
                     </div>
                 </div>
                 <div class="mine-game-preview">
                     <div class="mine-preview-icon">🌸</div>
-                    <p class="mine-preview-text">Лови падающие цветки нектара!<br>Каждый пойманный нектар = 1 $BEE</p>
+                    <p class="mine-preview-text">Лови падающие цветки нектара!<br>Каждый пойманный нектар = 1 $BEE<br><span class="mine-warning">⚠️ Остерегайся мин!</span></p>
                     <button class="play-btn" onclick="startGame()">
                         <span class="play-btn-icon">🎮</span>
                         <span class="play-btn-text">Играть</span>
@@ -136,30 +143,28 @@
                 </div>
                 <div class="mine-upgrades">
                     <h3 class="section-subtitle">⚡ Улучшения</h3>
-                    <div class="upgrade-card">
-                        <div class="upgrade-icon">⏱️</div>
-                        <div class="upgrade-info">
-                            <div class="upgrade-name">Больше билетов</div>
-                            <div class="upgrade-desc">+20 билетов к пополнению</div>
-                        </div>
-                        <div class="upgrade-cost">200 🪙</div>
+                    <div class="upgrade-grid" id="upgradeGrid"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- === КУБОК (Рейтинг) === -->
+        <section class="page" id="pageCup">
+            <div class="page-inner">
+                <h2 class="page-title">🏆 Кубок</h2>
+                <div class="cup-card">
+                    <div class="cup-header">
+                        <div class="cup-trophy">🏆</div>
+                        <div class="cup-title">Топ-10 игроков</div>
+                        <div class="cup-subtitle">По балансу токенов $BEE</div>
                     </div>
-                    <div class="upgrade-card">
-                        <div class="upgrade-icon">🎯</div>
-                        <div class="upgrade-info">
-                            <div class="upgrade-name">Больше времени</div>
-                            <div class="upgrade-desc">+10 секунд к игре</div>
-                        </div>
-                        <div class="upgrade-cost">350 🪙</div>
+                    <div class="cup-list" id="cupList">
+                        <div class="cup-loading">Загрузка рейтинга...</div>
                     </div>
-                    <div class="upgrade-card">
-                        <div class="upgrade-icon">💰</div>
-                        <div class="upgrade-info">
-                            <div class="upgrade-name">Бонус к монетам</div>
-                            <div class="upgrade-desc">+1 $BEE за нектар</div>
-                        </div>
-                        <div class="upgrade-cost">500 🪙</div>
-                    </div>
+                </div>
+                <div class="cup-my-rank" id="cupMyRank">
+                    <span class="cup-my-label">Ваше место в рейтинге:</span>
+                    <span class="cup-my-value" id="cupMyPlace">—</span>
                 </div>
             </div>
         </section>
@@ -197,7 +202,14 @@
         <section class="page" id="pageShop">
             <div class="page-inner">
                 <h2 class="page-title">🛒 Магазин</h2>
-                <div class="shop-grid" id="shopGrid"></div>
+
+                <!-- Инструменты -->
+                <h3 class="section-subtitle">🔧 Инструменты</h3>
+                <div class="shop-section" id="shopTools"></div>
+
+                <!-- Пчёлы и ульи -->
+                <h3 class="section-subtitle">🐝 Пчёлы и Ульи</h3>
+                <div class="shop-section" id="shopBees"></div>
             </div>
         </section>
     </div>
@@ -213,13 +225,14 @@
                 <span class="game-score-icon">🪙</span>
                 <span class="game-score-value" id="gameScore">0</span>
             </div>
+            <button class="game-close-btn" onclick="closeGame()">✕</button>
         </div>
         <div class="game-field" id="gameField">
             <div class="game-start-overlay" id="gameStartOverlay">
                 <div class="game-start-content">
                     <div class="game-start-icon">🌸</div>
                     <div class="game-start-title">Лови нектар!</div>
-                    <div class="game-start-sub">Тапай по цветкам, которые падают сверху</div>
+                    <div class="game-start-sub">Тапай по цветкам — лови нектар<br>⚠️ 25% шанс мины! Не тапай по минам!</div>
                     <div class="game-start-hint">30 секунд</div>
                 </div>
             </div>
@@ -273,6 +286,10 @@
         <button class="nav-item" data-page="pageMine" onclick="switchPage('pageMine', this)">
             <span class="nav-icon">⛏️</span>
             <span class="nav-label">Добыча</span>
+        </button>
+        <button class="nav-item" data-page="pageCup" onclick="switchPage('pageCup', this)">
+            <span class="nav-icon">🏆</span>
+            <span class="nav-label">Кубок</span>
         </button>
         <button class="nav-item" data-page="pageFriends" onclick="switchPage('pageFriends', this)">
             <span class="nav-icon">👥</span>
